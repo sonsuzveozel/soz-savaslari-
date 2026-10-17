@@ -387,7 +387,7 @@ function pub(){
 let me={pid:'',name:''};
 try{me.pid=localStorage.getItem('sozmp-pid')||'';me.name=localStorage.getItem('sozmp-name')||''}catch(e){}
 if(!me.pid){me.pid=Math.random().toString(36).slice(2,10);try{localStorage.setItem('sozmp-pid',me.pid)}catch(e){}}
-let sb=null,chan=null,code=null,isHost=false,V=null,net='off',lastState=0,chat=[],tab='lonca',sel='saadet',quote=null,confirmBreak=false,warned=0;
+let netErr='',health='',sb=null,chan=null,code=null,isHost=false,V=null,net='off',lastState=0,chat=[],tab='lonca',sel='saadet',quote=null,confirmBreak=false,warned=0;
 function out(m){if(m.t==='reveal')showReveal(m);if(chan)chan.send({type:'broadcast',event:'m',payload:m})}
 function reply(pid,m){m.to=pid;if(pid===me.pid)onMsg(m);else out(m)}
 let lastJson='';function setV(v){lastState=Date.now();const j=JSON.stringify(v);if(j===lastJson)return false;lastJson=j;V=v;return true}
@@ -408,7 +408,9 @@ function connect(c,host){
  sb=sb||window.supabase.createClient(SB_URL,SB_KEY);
  chan=sb.channel('sozsav-'+code,{config:{broadcast:{self:false}}});
  chan.on('broadcast',{event:'m'},({payload})=>onMsg(payload));
- chan.subscribe(st=>{net=st==='SUBSCRIBED'?'on':(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED')?'off':'connecting';
+ fetch(SB_URL+'/auth/v1/health',{headers:{apikey:SB_KEY}}).then(r=>{health=r.ok?'ok':'HTTP '+r.status;render()}).catch(e=>{health='ERR '+e.message;render()});
+ chan.subscribe((st,err)=>{net=st==='SUBSCRIBED'?'on':(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED')?'off':'connecting';
+  netErr=st==='SUBSCRIBED'?'':st+(err?': '+(err.message||err):'');if(netErr)console.warn('Realtime',netErr,err);
   if(st==='SUBSCRIBED'){if(isHost)push();else send({t:'hello',name:me.name})}render()});
  render();
 }
@@ -446,7 +448,8 @@ const hints=a=>(a.place||a.clue)?`<span class="clues">${a.place?`<span class="cl
 function vElection(){const v={tuz:0,gemici:0,kervan:0},by={},tv=l=>VOT.reduce((s,n)=>s+V.trust[n][l],0);
  VOT.forEach(n=>{const t=V.trust[n],s=LON.slice().sort((a,b)=>t[b]-t[a]);if(t[s[0]]>t[s[1]]){v[s[0]]++;by[n]=s[0]}else by[n]=null});return{v,by,tv}}
 function header(){const t=T(),p=myP(),l=myL();
- return`<header class="top"><div><h1>Söz Savaşları</h1><div class="sub">${t.sub}${code?` · ${t.roomT} <b style="color:var(--brass)">${code}</b>`:''} · <span class="net ${net==='off'?'bad':''}">${net==='on'?t.online:net==='off'?t.offline:t.connecting}</span></div></div>
+ return`<header class="top"><div><h1>Söz Savaşları</h1><div class="sub">${t.sub}${code?` · ${t.roomT} <b style="color:var(--brass)">${code}</b>`:''} · <span class="net ${net==='off'?'bad':''}">${net==='on'?t.online:net==='off'?t.offline:t.connecting}</span>${net==='off'&&code?` <button class="ghost" id="retry" style="padding:2px 8px;font-size:.8rem">↻</button>`:''}</div>
+ ${net==='off'&&code?`<div class="net bad" style="font-family:var(--f-num);font-size:.72rem">Realtime: ${esc(netErr||'?')} · Sunucu: ${esc(health||'?')}</div>`:''}</div>
  <div class="stats">${V&&V.phase==='play'&&p?`<div class="stat"><span>${t.day}</span><b>${V.day}/${V.len}</b></div><div class="stat" id="timerbox"><span>${t.time}</span><b id="timer">${fmt(V.deadline-Date.now())}</b></div><div class="stat"><span>${t.moves}</span><b>${p.moves}</b></div><div class="stat hot"><span>${t.gold}</span><b>${V.gold[l]}</b></div><div class="stat hot"><span>${t.secrets}</span><b>${V.secrets[l].length}</b></div>`:''}
  <button class="ghost" id="langb">${t.lang}</button></div></header>
  <div class="card" id="nohost" hidden style="border-color:var(--bad)">${t.noHost}</div>`}
@@ -477,7 +480,7 @@ function render(){
   bindCommon();return}
  renderGame();
 }
-function bindCommon(){document.getElementById('langb').onclick=()=>{lang=lang==='tr'?'en':'tr';try{localStorage.setItem('sozmp-lang',lang)}catch(e){}render()}}
+function bindCommon(){const rt=document.getElementById('retry');if(rt)rt.onclick=()=>{try{chan&&sb.removeChannel(chan)}catch(e){}connect(code,isHost)};document.getElementById('langb').onclick=()=>{lang=lang==='tr'?'en':'tr';try{localStorage.setItem('sozmp-lang',lang)}catch(e){}render()}}
 function drawMap(){
  const t=T(),l=myL();let h=`<defs><pattern id="wv" width="26" height="12" patternUnits="userSpaceOnUse"><path d="M0 7 Q6.5 2 13 7 T26 7" fill="none" stroke="var(--wave)" stroke-width="1.2"/></pattern></defs>
  <rect width="400" height="300" fill="var(--land)"/><path d="M68 64 L205 86 L328 62 M205 86 L242 148 L306 204 M92 150 L242 148 M92 150 L162 204 L40 204 M68 64 L92 150" fill="none" stroke="var(--road)" stroke-width="7" stroke-linecap="round"/>
